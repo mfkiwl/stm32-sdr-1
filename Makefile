@@ -39,15 +39,20 @@ SIZE=arm-none-eabi-size
 INC=-I $(INCDIR) \
 	-I $(CMSIS)/Include \
 	-I $(CMSIS_DEVICE)/Include \
+    -I $(CMSIS)/DSP/Include
+# additional linker searchpath for ARM math library
+LINC=-L $(CMSIS)/Lib/GCC
 # compiler flags
 CFLAGS=$(INC)
-CFLAGS+=-D$(TARGET) -mcpu=cortex-m4 -mthumb
-CFLAGS+=-Wall -Werror -std=c99
-CFLAGS+=-Os -ggdb -ffreestanding -ffunction-sections -fdata-sections -flto
+CFLAGS+=-DARM_MATH_CM4
+CFLAGS+=-D$(TARGET) -mcpu=cortex-m4 -mthumb -mfloat-abi=hard -mfpu=fpv4-sp-d16
+CFLAGS+=-Wall -std=c99
+CFLAGS+=-O3 -ggdb -ffast-math -ffreestanding -ffunction-sections -fdata-sections -flto
 # linker flags
 LDFLAGS=-Wl,--gc-sections -T $(LDSCRIPT)
+LDFLAGS+=$(LINC) -Wl,-larm_cortexM4lf_math
 
-all: dirs $(EXEC) $(BINARY)
+all: dirs $(EXEC)
 	$(SIZE) $(EXEC)
 
 $(BINARY): $(EXEC)
@@ -76,4 +81,4 @@ prog: $(BINARY)
 	st-flash write $< 0x8000000
 
 clean:
-	rm -rf $(OBJECTS) $(EXEC) $(BINARY)
+	rm -rf $(OBJECTS) $(STARTUP_OBJ) $(EXEC) $(BINARY)

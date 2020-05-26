@@ -1,8 +1,21 @@
 #include <stdint.h>
+#include <stdlib.h>
 #include <stm32f4xx.h>
 
 #include "i2c.h"
 #include "si5351.h"
+
+#define UART_BUFSIZE 10
+volatile uint8_t rxcnt = 0;
+volatile char uart_rxbuf[UART_BUFSIZE] = {0};
+
+typedef enum {
+    IDLE,
+    RECEIVE,
+    END
+} UART_StateMachine;
+
+volatile UART_StateMachine uart_state;
 
 void busy(uint32_t delay) {
     for (uint32_t i = 0; i < delay; i++) __asm("mov r0,r0");
@@ -43,39 +56,45 @@ void uart_puts(char* s) {
 void USART2_IRQHandler() {
     if (USART2->SR & USART_SR_RXNE) {
         // we received something
-        char c = USART2->DR;
-        uart_putc(c);
+        char rx = USART2->DR;
+
+        switch (uart_state) {
+            case IDLE:
+                if (rx == '#') {
+                    rxcnt = 0;
+                    uart_state = RECEIVE;
+                } else { 
+                    uart_state = IDLE;
+                }
+                break;
+
+            case RECEIVE:
+                if (rxcnt < UART_BUFSIZE-1) {
+                    if (rx == '\n') {
+                        uart_rxbuf[rxcnt] = 0;
+                        uart_state = END;
+                    } else {
+                        uart_rxbuf[rxcnt++] = rx;
+                        uart_state = RECEIVE; 
+                    }
+                } else {
+                    uart_rxbuf[rxcnt] = 0;
+                    uart_state = IDLE;
+                }
+                break;
+
+            case END:
+                break;
+
+            default:
+                uart_state = IDLE;
+                break;
+        }
     }
 }
 
-void si5351_init() {
-    FBMS_Config fbmsa;
-    OMS05_Config oms;
-
-    fbmsa.P1 = 2570;
-    fbmsa.P2 = 251658;
-    fbmsa.P3 = 1048575;
-
-    oms.P1 = 10496; 
-    oms.P2 = 0;
-    oms.P3 = 1;
-    oms.DIV = 0;
-    oms.DIVBY4 = 0;
-
-    si5351_powerdown();
-    si5351_write_fbms_config(MSNA, fbmsa);
-    si5351_write_oms05_config(MS0, oms);
-    si5351_write_oms05_config(MS1, oms);
-    si5351_write_reg(CLK1_PHOFF, 86);
-
-    si5351_write_reg(XTAL_LOAD_CAPACITANCE, XTAL_CL1 | XTAL_CL0 | 0x12);
-    si5351_write_reg(CLK0_CONTROL, 0x0C);
-    si5351_write_reg(CLK1_CONTROL, 0x0C);
-    si5351_write_reg(PLL_RESET, 0xA0);
-    si5351_write_reg(OUTPUT_ENABLE_CONTROL, ~(CLK1_OEB | CLK0_OEB));
-}
-
 int main(void) {
+    SystemInit();
     /* 
     RCC->APB1ENR |= RCC_APB1ENR_PWREN;
     PWR->CR |= PWR_CR_VOS_1;
@@ -96,6 +115,9 @@ int main(void) {
     GPIOA->PUPDR &= ~GPIO_PUPDR_PUPDR5;
 
     GPIOA->BSRR |= GPIO_BSRR_BS5;
+    
+    for (uint8_t i = 0; i < UART_BUFSIZE; i++) uart_rxbuf[i] = 0;
+    uart_state = IDLE;
 
     uart_init();
     uart_puts("Hello World!\r\n");
@@ -103,11 +125,17 @@ int main(void) {
     i2c_init();
     si5351_init();
 
-
     while(1) {
-        GPIOA->BSRR |= GPIO_BSRR_BS5;
-        busy(0x000fffff);
-        GPIOA->BSRR |= GPIO_BSRR_BR5;
-        busy(0x000fffff);
+        while (uart_state != END) {
+            GPIOA->BSRR |= GPIO_BSRR_BS5;
+            busy(0x000fffff);
+            GPIOA->BSRR |= GPIO_BSRR_BR5;
+            busy(0x000fffff);
+        }
+        uart_puts(uart_rxbuf);
+        uint32_t freq = atoi(uart_rxbuf);
+        si5351_set_frequency(freq);
+        for (uint8_t i = 0; i < UART_BUFSIZE; i++) uart_rxbuf[i] = 0;
+        uart_state = IDLE;
     }
 }

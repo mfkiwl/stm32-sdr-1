@@ -2,6 +2,7 @@
 #define SI5351_H
 
 #include <stdint.h>
+#include <math.h>
 #include "i2c.h"
 
 #define DEV_WRITE_ADDRESS           0xC0
@@ -217,8 +218,6 @@ typedef struct {
     uint32_t P3;
 } FBMS_Config;
 
-void si5351_write_fbms_config(uint8_t msn, FBMS_Config config);
-
 typedef struct {
     uint32_t P1;
     uint32_t P2;
@@ -227,16 +226,12 @@ typedef struct {
     uint8_t DIVBY4;
 } OMS05_Config;
 
-void si5351_write_oms05_config(uint8_t ms, OMS05_Config config);
-
 typedef struct {
     uint8_t MS6_P1;
     uint8_t MS7_P1;
     uint8_t R6_DIV;
     uint8_t R7_DIV;
 } OMS67_Config;
-
-void si5351_write_oms67_config(OMS67_Config config);
 
 typedef struct {
     uint16_t DN_P1;
@@ -251,12 +246,18 @@ typedef struct {
     uint8_t NCLK;
 } SSC_Config;
 
-void si5351_write_ssc_config(SSC_Config config);
-
-void si5351_write_vcxo_param(uint32_t param);
-
-void si5351_write_reg(uint8_t reg, uint8_t value);
-
+// User functions
+void si5351_init();
+void si5351_set_frequency(uint32_t freq);
 void si5351_powerdown();
+// Internal functions
+void si5351_freq2coeff(uint32_t freq, uint32_t* abc, uint32_t* def);
+void si5351_coeff2param(uint32_t* coeff, uint32_t* param);
+void si5351_write_fbms_config(uint8_t msn, FBMS_Config config);
+void si5351_write_oms05_config(uint8_t ms, OMS05_Config config);
+void si5351_write_oms67_config(OMS67_Config config);
+void si5351_write_ssc_config(SSC_Config config);
+void si5351_write_vcxo_param(uint32_t param);
+void si5351_write_reg(uint8_t reg, uint8_t value);
 
 #endif

@@ -1,5 +1,78 @@
 #include "si5351.h"
 
+void si5351_init() {
+    FBMS_Config fbmsa;
+    OMS05_Config oms;
+
+    fbmsa.P1 = 2570;
+    fbmsa.P2 = 251658;
+    fbmsa.P3 = 1048575;
+
+    oms.P1 = 10496;
+    oms.P2 = 0;
+    oms.P3 = 1;
+    oms.DIV = 0;
+    oms.DIVBY4 = 0;
+
+    si5351_powerdown();
+    si5351_write_fbms_config(MSNA, fbmsa);
+    si5351_write_oms05_config(MS0, oms);
+    si5351_write_reg(XTAL_LOAD_CAPACITANCE, XTAL_CL1 | XTAL_CL0 | 0x12);
+    si5351_write_reg(CLK0_CONTROL, 0x0C);
+    si5351_write_reg(PLL_RESET, 0xA0);
+    si5351_write_reg(OUTPUT_ENABLE_CONTROL, ~CLK0_OEB);
+}
+
+void si5351_freq2coeff(uint32_t freq, uint32_t* abc, uint32_t* def) {
+    const uint32_t fxtal = 25000000;
+    // start with 600 MHz VCO test frequency
+    uint32_t fvco = 600000000;
+    // round up the needed output divider ratio to next highest integer
+    uint32_t omd = (uint32_t)ceilf((float)fvco/(float)freq);
+    // calculate resulting VCO frequency
+    //fvco = omd*freq;
+    // calculate PLL feedback ratio
+    float fmd = (float)omd*(float)freq/(float)fxtal;
+    abc[0] = (uint32_t)floorf(fmd);
+    abc[2] = 0x000fffff;
+    abc[1] = (uint32_t)roundf((fmd - (float)abc[0]) * (float)abc[2]);
+    // output divider
+    def[0] = omd;
+    def[1] = 0;
+    def[2] = 1;
+}
+
+void si5351_coeff2param(uint32_t* coeff, uint32_t* param) {
+    param[0] = (coeff[0]<<7) + (uint32_t)(128.0f*(float)coeff[1]/(float)coeff[2]) - 512;
+    param[1] = (coeff[1]<<7) - coeff[2]*(uint32_t)(128.0f*(float)coeff[1]/(float)coeff[2]);
+    param[2] = coeff[2];
+}
+
+void si5351_set_frequency(uint32_t freq) {
+    FBMS_Config fbmsa;
+    OMS05_Config oms;
+    uint32_t abc[3] = {0};
+    uint32_t def[3] = {0};
+    uint32_t param[3] = {0};
+
+    si5351_freq2coeff(freq, abc, def);
+    // PLL feedback multisynth
+    si5351_coeff2param(abc, param);
+    fbmsa.P1 = param[0];
+    fbmsa.P2 = param[1];
+    fbmsa.P3 = param[2];
+    si5351_write_fbms_config(MSNA, fbmsa);
+    // output multisynth
+    si5351_coeff2param(def, param);
+    oms.P1 = param[0];
+    oms.P2 = param[1];
+    oms.P3 = param[2];
+    oms.DIV = 0;
+    oms.DIVBY4 = 0;
+    si5351_write_oms05_config(MS0, oms);
+    si5351_write_reg(PLL_RESET, PLLA_RST);
+}
+
 void si5351_write_reg(uint8_t reg, uint8_t value) {
     i2c_start(DEV_WRITE_ADDRESS);
     i2c_write(reg);

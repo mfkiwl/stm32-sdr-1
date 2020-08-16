@@ -52,7 +52,9 @@ CFLAGS+=-O3 -ggdb -ffast-math -ffreestanding -ffunction-sections -fdata-sections
 LDFLAGS=-Wl,--gc-sections -T $(LDSCRIPT)
 LDFLAGS+=$(LINC) -Wl,-larm_cortexM4lf_math
 
-all: dirs $(EXEC)
+.PHONY: all clean debug prog
+
+all: $(EXEC)
 	$(SIZE) $(EXEC)
 
 $(BINARY): $(EXEC)
@@ -62,17 +64,12 @@ $(EXEC): $(STARTUP_OBJ) $(OBJECTS)
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.c $(HEADERS)
+	-mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 $(STARTUP_OBJ): $(STARTUP)
+	-mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c -o $@ $<
-
-$(OBJDIR):
-	mkdir -p $@
-
-dirs: $(OBJDIR) 
-
-.PHONY: clean debug prog
 
 debug: $(EXEC)
 	$(GDB) -ex "target remote :4242" $<
@@ -81,4 +78,4 @@ prog: $(BINARY)
 	st-flash write $< 0x8000000
 
 clean:
-	rm -rf $(OBJECTS) $(STARTUP_OBJ) $(EXEC) $(BINARY)
+	rm -rf $(OBJDIR) $(EXEC) $(BINARY)

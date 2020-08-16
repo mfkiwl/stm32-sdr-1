@@ -115,7 +115,20 @@ int main(void) {
     GPIOA->PUPDR &= ~GPIO_PUPDR_PUPDR5;
 
     GPIOA->BSRR |= GPIO_BSRR_BS5;
-    
+
+    // set up ~TXEN and ~RXEN
+    // PA8 = ~TXEN
+    // PA9 = ~RXEN
+    GPIOA->MODER |= GPIO_MODER_MODER9_0 | GPIO_MODER_MODER8_0;
+    GPIOA->OTYPER &= ~(GPIO_OTYPER_OT9 | GPIO_OTYPER_OT8);
+    GPIOA->OSPEEDR |= GPIO_OSPEEDR_OSPEED9_0 | GPIO_OSPEEDR_OSPEED8_0;
+    GPIOA->PUPDR &= ~(GPIO_PUPDR_PUPDR9 | GPIO_PUPDR_PUPDR8);
+
+    // enable RX 
+    // both pins need to be set low because multiplexer does not
+    // allow independent control of both halves
+    GPIOA->BSRR |= GPIO_BSRR_BR9 | GPIO_BSRR_BR8;
+
     for (uint8_t i = 0; i < UART_BUFSIZE; i++) uart_rxbuf[i] = 0;
     uart_state = IDLE;
 
@@ -125,6 +138,8 @@ int main(void) {
     i2c_init();
     si5351_init();
 
+    si5351_set_frequency(28000000);
+
     while(1) {
         while (uart_state != END) {
             GPIOA->BSRR |= GPIO_BSRR_BS5;
@@ -132,9 +147,9 @@ int main(void) {
             GPIOA->BSRR |= GPIO_BSRR_BR5;
             busy(0x000fffff);
         }
-        uart_puts(uart_rxbuf);
-        uint32_t freq = atoi(uart_rxbuf);
-        si5351_set_frequency(freq);
+        //uart_puts(uart_rxbuf);
+        uint32_t freq = atoi((const char*)uart_rxbuf);
+        si5351_set_frequency(freq*4.0f);
         for (uint8_t i = 0; i < UART_BUFSIZE; i++) uart_rxbuf[i] = 0;
         uart_state = IDLE;
     }

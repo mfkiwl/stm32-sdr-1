@@ -46,8 +46,8 @@ LINC=-L $(CMSIS)/Lib/GCC
 CFLAGS=$(INC)
 CFLAGS+=-DARM_MATH_CM4
 CFLAGS+=-D$(TARGET) -mcpu=cortex-m4 -mthumb -mfloat-abi=hard -mfpu=fpv4-sp-d16
-CFLAGS+=-Wall -std=c99
-CFLAGS+=-O3 -ggdb -ffast-math -ffreestanding -ffunction-sections -fdata-sections -flto
+CFLAGS+=-Wall -Werror -std=c99
+CFLAGS+=-O0 -ggdb -ffast-math -ffreestanding -ffunction-sections -fdata-sections -flto
 # linker flags
 LDFLAGS=-Wl,--gc-sections -T $(LDSCRIPT)
 LDFLAGS+=$(LINC) -Wl,-larm_cortexM4lf_math
@@ -71,8 +71,10 @@ $(STARTUP_OBJ): $(STARTUP)
 	-mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c -o $@ $<
 
+# first start openocd like this:
+# openocd -f interface/stlink-v2-1.cfg -f target/stm32f4x.cfg
 debug: $(EXEC)
-	$(GDB) -ex "target remote :4242" $<
+	$(GDB) -ex "target remote :3333" $<
 
 prog: $(BINARY)
 	st-flash write $< 0x8000000

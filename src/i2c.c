@@ -4,16 +4,20 @@ void i2c_init() {
     // enable GPIOB clock
     RCC->AHB1ENR |= RCC_AHB1ENR_GPIOBEN;
     // PB8 (SCL) and PB9 (SDA)
-    GPIOB->MODER |= GPIO_MODER_MODE9_1 | GPIO_MODER_MODE8_1;
-    GPIOB->OTYPER |= GPIO_OTYPER_OT9 | GPIO_OTYPER_OT8;
-    GPIOB->PUPDR |= GPIO_PUPDR_PUPDR9_0 | GPIO_PUPDR_PUPDR8_0;
-    GPIOB->AFR[1] |= (4<<GPIO_AFRH_AFSEL9_Pos) | (4<<GPIO_AFRH_AFSEL8_Pos);
+    GPIOB->MODER |= GPIO_MODER_MODE9_1 |
+                    GPIO_MODER_MODE8_1;
+    GPIOB->OTYPER |= GPIO_OTYPER_OT9 |
+                     GPIO_OTYPER_OT8;
+    GPIOB->PUPDR |= GPIO_PUPDR_PUPDR9_0 |
+                    GPIO_PUPDR_PUPDR8_0;
+    GPIOB->AFR[1] |= (4<<GPIO_AFRH_AFSEL9_Pos) |
+                     (4<<GPIO_AFRH_AFSEL8_Pos);
     
     // Enable I2C1 clock
     RCC->APB1ENR |= RCC_APB1ENR_I2C1EN;
     I2C1->CR1 &= ~I2C_CR1_PE;
-    I2C1->CR2 |= (16<<I2C_CR2_FREQ_Pos);
-    I2C1->CCR = 80;
+    I2C1->CR2 |= (42<<I2C_CR2_FREQ_Pos);
+    I2C1->CCR = 420;
     I2C1->TRISE = 17;
     I2C1->CR1 |= I2C_CR1_PE;
 }

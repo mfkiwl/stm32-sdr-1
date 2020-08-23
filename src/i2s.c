@@ -1,15 +1,26 @@
 #include "i2s.h"
 
-volatile uint8_t i2s_tx_cnt, i2s_rx_cnt;
-volatile int32_t left_buffer, right_buffer;
+volatile int32_t i2s_receive_buffer0[I2S_BUFSIZE];
+volatile int32_t i2s_receive_buffer1[I2S_BUFSIZE];
+volatile int32_t i2s_transmit_buffer0[I2S_BUFSIZE];
+volatile int32_t i2s_transmit_buffer1[I2S_BUFSIZE];
+
+volatile int32_t* i2s_receive_buffer;
+volatile int32_t* i2s_transmit_buffer;
+
+volatile bool i2s_buffer_full;
+
+// This is for testing purposes only
+// The received data from the previous transfer is 
+// immediately transmitted again without any signal processing
+//volatile int32_t* i2s_transmit_buffer0 = i2s_receive_buffer0;
+//volatile int32_t* i2s_transmit_buffer1 = i2s_receive_buffer1;
 
 void i2s_init() {
-    i2s_tx_cnt = 0;
-    i2s_rx_cnt = 0;
-    left_buffer = 0xaaaaaa00;
-    right_buffer = 0xaaaaaa00;
+    i2s_buffer_full = false;
 
     i2s_gpio_init();
+    i2s_dma_init();
 
     /* I2S2 setup
         I2S mode
@@ -29,23 +40,21 @@ void i2s_init() {
     while(!(RCC->CR & RCC_CR_PLLI2SRDY));
 
     RCC->APB1ENR |= RCC_APB1ENR_SPI2EN;
-    //SPI2->CR2 = SPI_CR2_TXDMAEN | SPI_CR2_RXDMAEN;
     // SPI2, Master transmit
     SPI2->I2SPR = SPI_I2SPR_MCKOE | SPI_I2SPR_ODD | 3;
     SPI2->I2SCFGR = SPI_I2SCFGR_I2SMOD |
                     SPI_I2SCFGR_I2SCFG_1 |
                     SPI_I2SCFGR_DATLEN_0;
 
-    SPI2->CR2 |= SPI_CR2_TXEIE; // | SPI_CR2_RXNEIE;
+    SPI2->CR2 |= SPI_CR2_TXDMAEN;
+
 
     // I2S2ext, Slave receive
     I2S2ext->I2SCFGR = SPI_I2SCFGR_I2SMOD |
                        SPI_I2SCFGR_I2SCFG_0 |
                        SPI_I2SCFGR_DATLEN_0;
-    I2S2ext->CR2 |= SPI_CR2_RXNEIE;
 
-
-    NVIC_EnableIRQ(SPI2_IRQn);
+    I2S2ext->CR2 |= SPI_CR2_RXDMAEN;
 
     // enable I2S2
     I2S2ext->I2SCFGR |= SPI_I2SCFGR_I2SE;
@@ -95,45 +104,118 @@ void i2s_gpio_init() {
     GPIOC->AFR[0] |= (5<<GPIO_AFRL_AFSEL6_Pos);
 }
 
-void SPI2_IRQHandler() {
-    //GPIOA->ODR ^= GPIO_ODR_OD5;
-    if (SPI2->SR & SPI_SR_TXE) {
-        GPIOA->BSRR |= GPIO_BSRR_BR5;
-        if (SPI2->SR & SPI_SR_CHSIDE) {
-            if (!i2s_tx_cnt) {
-                SPI2->DR = (right_buffer>>16);
-                i2s_tx_cnt = 1;
-            } else {
-                SPI2->DR = (right_buffer);
-                i2s_tx_cnt = 0;
-            }
+void i2s_dma_init() {
+    // enable DMA1 clock
+    RCC->AHB1ENR |= RCC_AHB1ENR_DMA1EN;
+    // I2S2 transmit stream: Stream 4 Channel 0
+    // disable DMA Stream and wait for transfers to finish
+    DMA1_Stream4->CR &= ~DMA_SxCR_EN;
+    while (DMA1_Stream4->CR & DMA_SxCR_EN);
+    // clear any interrupt flags
+    DMA1->HIFCR = DMA_HIFCR_CTCIF4 |
+                  DMA_HIFCR_CHTIF4 |
+                  DMA_HIFCR_CTEIF4 |
+                  DMA_HIFCR_CDMEIF4 |
+                  DMA_HIFCR_CFEIF4;
+    // configure
+    DMA1_Stream4->PAR = (uint32_t)&SPI2->DR;
+    DMA1_Stream4->M0AR = (uint32_t)i2s_transmit_buffer0;
+    DMA1_Stream4->M1AR = (uint32_t)i2s_transmit_buffer1;
+    DMA1_Stream4->NDTR = (I2S_BUFSIZE<<1);
+    DMA1_Stream4->FCR = (0<<DMA_SxFCR_FEIE_Pos) |
+                        (1<<DMA_SxFCR_DMDIS_Pos) |
+                        (3<<DMA_SxFCR_FTH_Pos);
+    DMA1_Stream4->CR = (0<<DMA_SxCR_CHSEL_Pos) |
+                       (0<<DMA_SxCR_MBURST_Pos) |
+                       (0<<DMA_SxCR_PBURST_Pos) |
+                       (0<<DMA_SxCR_CT_Pos) |
+                       (1<<DMA_SxCR_DBM_Pos) |
+                       (0<<DMA_SxCR_PL_Pos) |
+                       (0<<DMA_SxCR_PINCOS_Pos) |
+                       (2<<DMA_SxCR_MSIZE_Pos) |
+                       (1<<DMA_SxCR_PSIZE_Pos) |
+                       (1<<DMA_SxCR_MINC_Pos) |
+                       (0<<DMA_SxCR_PINC_Pos) |
+                       (0<<DMA_SxCR_CIRC_Pos) |
+                       (1<<DMA_SxCR_DIR_Pos) |
+                       (0<<DMA_SxCR_PFCTRL_Pos) |
+                       (1<<DMA_SxCR_TCIE_Pos) |
+                       (0<<DMA_SxCR_HTIE_Pos) |
+                       (0<<DMA_SxCR_TEIE_Pos) |
+                       (0<<DMA_SxCR_DMEIE_Pos) |
+                       (1<<DMA_SxCR_EN_Pos);
+
+    NVIC_EnableIRQ(DMA1_Stream4_IRQn);
+
+    // I2S2ext receive stream: Stream 3 Channel 3
+    // disable DMA Stream and wait for transfers to finish
+    DMA1_Stream3->CR &= ~DMA_SxCR_EN;
+    while (DMA1_Stream3->CR & DMA_SxCR_EN);
+    // clear interrupt flags
+    DMA1->LIFCR = DMA_LIFCR_CTCIF3 |
+                  DMA_LIFCR_CHTIF3 |
+                  DMA_LIFCR_CTEIF3 |
+                  DMA_LIFCR_CDMEIF3 |
+                  DMA_LIFCR_CFEIF3;
+    // configure
+    DMA1_Stream3->PAR = (uint32_t)&I2S2ext->DR;
+    DMA1_Stream3->M0AR = (uint32_t)i2s_receive_buffer0;
+    DMA1_Stream3->M1AR = (uint32_t)i2s_receive_buffer1;
+    DMA1_Stream3->NDTR = (I2S_BUFSIZE<<1);
+    DMA1_Stream3->FCR = (0<<DMA_SxFCR_FEIE_Pos) |
+                        (1<<DMA_SxFCR_DMDIS_Pos) |
+                        (3<<DMA_SxFCR_FTH_Pos);
+    DMA1_Stream3->CR = (3<<DMA_SxCR_CHSEL_Pos) |
+                       (0<<DMA_SxCR_MBURST_Pos) |
+                       (0<<DMA_SxCR_PBURST_Pos) |
+                       (1<<DMA_SxCR_CT_Pos) |
+                       (1<<DMA_SxCR_DBM_Pos) |
+                       (0<<DMA_SxCR_PL_Pos) |
+                       (0<<DMA_SxCR_PINCOS_Pos) |
+                       (2<<DMA_SxCR_MSIZE_Pos) |
+                       (1<<DMA_SxCR_PSIZE_Pos) |
+                       (1<<DMA_SxCR_MINC_Pos) |
+                       (0<<DMA_SxCR_PINC_Pos) |
+                       (0<<DMA_SxCR_CIRC_Pos) |
+                       (0<<DMA_SxCR_DIR_Pos) |
+                       (0<<DMA_SxCR_PFCTRL_Pos) |
+                       (1<<DMA_SxCR_TCIE_Pos) |
+                       (0<<DMA_SxCR_HTIE_Pos) |
+                       (0<<DMA_SxCR_TEIE_Pos) |
+                       (0<<DMA_SxCR_DMEIE_Pos) |
+                       (1<<DMA_SxCR_EN_Pos);
+
+    NVIC_EnableIRQ(DMA1_Stream3_IRQn);
+}
+
+void DMA1_Stream4_IRQHandler() {
+    // I2S2 master transmit handler
+    if (DMA1->HISR & DMA_HISR_TCIF4) {
+        //GPIOA->BSRR = GPIO_BSRR_BS5;
+        // update the buffer pointer
+        if (DMA1_Stream4->CR & DMA_SxCR_CT) {
+            i2s_transmit_buffer = i2s_transmit_buffer0;
         } else {
-            if (!i2s_tx_cnt) {
-                SPI2->DR = (left_buffer>>16);
-                i2s_tx_cnt = 1;
-            } else {
-                SPI2->DR = (left_buffer);
-                i2s_tx_cnt = 0;
-            }
+            i2s_transmit_buffer = i2s_transmit_buffer1;
         }
-    } else if (I2S2ext->SR & SPI_SR_RXNE) {
-        GPIOA->BSRR |= GPIO_BSRR_BS5;
-        if (I2S2ext->SR & SPI_SR_CHSIDE) {
-            if (!i2s_rx_cnt) {
-                right_buffer = (I2S2ext->DR<<16);
-                i2s_rx_cnt = 1;
-            } else {
-                right_buffer |= I2S2ext->DR;
-                i2s_rx_cnt = 0;
-            }
+        // clear the interrupt flag
+        DMA1->HIFCR = DMA_HIFCR_CTCIF4;
+    }
+}
+
+void DMA1_Stream3_IRQHandler() {
+    // I2S2ext slave receive handler
+    if (DMA1->LISR & DMA_LISR_TCIF3) {
+        //GPIOA->BSRR = GPIO_BSRR_BR5;
+        // update the buffer pointer
+        if (DMA1_Stream3->CR & DMA_SxCR_CT) {
+            i2s_receive_buffer = i2s_receive_buffer0;
         } else {
-            if (!i2s_rx_cnt) {
-                left_buffer = (I2S2ext->DR<<16);
-                i2s_rx_cnt = 1;
-            } else {
-                left_buffer |= I2S2ext->DR;
-                i2s_rx_cnt = 0;
-            }
+            i2s_receive_buffer = i2s_receive_buffer1;
         }
+        // let the main application know
+        i2s_buffer_full = true;
+        // clear the interrupt flag
+        DMA1->LIFCR = DMA_LIFCR_CTCIF3;
     }
 }

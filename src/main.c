@@ -8,6 +8,9 @@
 #include "si5351.h"
 #include "wm8731.h"
 
+#include "am.h"
+#include "ssb.h"
+
 void busy(uint32_t delay) {
     for (uint32_t i = 0; i < delay; i++) __asm("mov r0,r0");
 }
@@ -88,6 +91,11 @@ int main(void) {
     nucleo_led_init();
     tayloe_gpio_init();
 
+    //AM_Demodulator am;
+    //AM_Demodulator_init(&am);
+    SSB_Demodulator ssb;
+    SSB_Demodulator_init(&ssb);
+
     uart_init();
     uart_puts("Hello World!\r\n");
 
@@ -97,14 +105,26 @@ int main(void) {
     wm8731_init();
     i2s_init();
 
+
+    wm8731_set_hp_volume(-26, BOTH);
+/*
+    float tone0 = 0;
+    float tone1 = 0;
+    float sin = 0;
+    q31_t tmp;
+*/
+
     while (1) {
         while (uart_state != END) {
-        /*
-            nucleo_led_on();
-            busy(0x000fffff);
-            nucleo_led_off();
-            busy(0x000fffff);
-        */
+            if (i2s_buffer_full == true) {
+                i2s_buffer_full = false;
+                demod_ssb(&ssb);
+            } else {
+                nucleo_led_on();
+                busy(0x00ffffff);
+                nucleo_led_off();
+                busy(0x00ffffff);
+            }
         }
         
         uint32_t freq = atoi((const char*)uart_rxbuf);

@@ -47,10 +47,11 @@ CFLAGS=$(INC)
 CFLAGS+=-DARM_MATH_CM4
 CFLAGS+=-D$(TARGET) -mcpu=cortex-m4 -mthumb -mfloat-abi=hard -mfpu=fpv4-sp-d16
 CFLAGS+=-Wall -Werror -std=c99
-CFLAGS+=-O0 -ggdb -ffast-math -ffreestanding -ffunction-sections -fdata-sections -flto
+CFLAGS+=-O2 -ggdb -ffast-math -ffreestanding -ffunction-sections -fdata-sections -flto
 # linker flags
 LDFLAGS=-Wl,--gc-sections -T $(LDSCRIPT)
-LDFLAGS+=$(LINC) -Wl,-larm_cortexM4lf_math
+LDFLAGS+=$(LINC)
+LDLIBS=-Wl,-larm_cortexM4lf_math
 
 .PHONY: all clean debug prog
 
@@ -61,7 +62,7 @@ $(BINARY): $(EXEC)
 	$(OBJCOPY) -O binary $< $@
 
 $(EXEC): $(STARTUP_OBJ) $(OBJECTS)
-	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.c $(HEADERS)
 	-mkdir -p $(dir $@)
@@ -77,7 +78,7 @@ debug: $(EXEC)
 	$(GDB) -ex "target remote :3333" $<
 
 prog: $(BINARY)
-	st-flash write $< 0x8000000
+	st-flash --reset write $< 0x8000000
 
 clean:
 	rm -rf $(OBJDIR) $(EXEC) $(BINARY)

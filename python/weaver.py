@@ -15,9 +15,6 @@ def ellip(fs, fpass, fstop, gpass, gstop):
 def ssb_mod(samples, fs, fc, filter_sos, usb=True):
     audio_sc = np.exp(-2j*np.pi*1.65e3/fs*np.arange(len(samples)))
 
-    if not usb:
-        audio_sc = np.conj(audio_sc)
-
     x = samples * audio_sc
     y = signal.sosfilt(filter_sos, x)
 
@@ -30,7 +27,10 @@ def ssb_mod(samples, fs, fc, filter_sos, usb=True):
     lo_signal = np.exp(2j*np.pi*flo/fs*np.arange(len(y)))
     z = lo_signal * y
 
-    return np.real(z) + np.imag(z)
+    if usb:
+        return np.real(z) + np.imag(z)
+    else:
+        return np.real(z) - np.imag(z)
 
 def ssb_demod(samples, fs, fc, filter_sos, usb=True):
     flo = 0
@@ -60,8 +60,19 @@ baseband_input = baseband_input / 32768.0
 # compute low pass filter
 sos = ellip(fs, 1.35e3, 1.5e3, 1, 80)
 
-ssb_signal = ssb_mod(baseband_input, fs, 5e3, sos, usb=False)
-wavfile.write('ssb_signal.wav', fs, ssb_signal)
+ssb_signal = ssb_mod(baseband_input, fs, 5e3, sos, usb=True)
 
-baseband_output = ssb_demod(ssb_signal, fs, 5e3, sos, usb=False)
+#losignal = np.exp(-2j*np.pi*10e3/fs*np.arange(len(ssb_signal)))
+#ssb_signal = ssb_signal * losignal
+#I = np.real(ssb_signal).astype('float32')
+#Q = np.imag(ssb_signal).astype('float32')
+#I = ssb_signal
+#Q = ssb_signal
+#out = np.reshape(np.vstack((I,Q)), (-1,2))
+#wavfile.write('ssb_signal.wav', fs, out)
+wavfile.write('ssb_signal.wav', fs, ssb_signal)
+#a = np.reshape(np.vstack((I,Q)),(-1,2))
+#print(a.shape)
+
+baseband_output = ssb_demod(ssb_signal, fs, 5e3, sos, usb=True)
 wavfile.write('baseband_output.wav', fs, baseband_output)

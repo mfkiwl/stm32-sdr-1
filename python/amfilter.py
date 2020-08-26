@@ -14,10 +14,24 @@ def ellip(fs, fpass, fstop, gpass, gstop):
     sos = signal.ellip(order, gpass, gstop, [wn], output='sos')
     return sos
 
+def cheby(fs, fpass, fstop, gpass, gstop):
+    wpass = 2*fpass/fs
+    wstop = 2*fstop/fs
+    [order, wn] = signal.cheb1ord(wpass, wstop, gpass, gstop)
+    sos = signal.cheby1(order,gpass,[wn], btype='lowpass', output='sos')
+    return sos
+
+def ellip_ba(fs, fpass, fstop, gpass, gstop):
+    wpass = 2*fpass/fs
+    wstop = 2*fstop/fs
+    [order, wn] = signal.ellipord(wpass, wstop, gpass, gstop)
+    sos = signal.ellip(order, gpass, gstop, [wn], output='ba')
+    return sos
+
 def ellip_bp():
     fs = 48e3
-    fpass = np.array([700, 900])
-    fstop = np.array([600, 1000])
+    fpass = np.array([300, 4500])
+    fstop = np.array([0, 5000])
     gpass = 1
     gstop = 60
 
@@ -63,10 +77,15 @@ def sos2cmsis(sos):
 
 if __name__ == "__main__":
     #sos = ellip(fs, 4.5e3, 5e3, 1, 60)
-    sos = ellip(fs,1.35e3, 1.5e3, 1, 60)
-    sos2cmsis(sos)
+    #sos = ellip(fs,1.35e3, 1.5e3, 1, 80)
+    #sos = ellip_bp()
+    #sos = ellip(fs,200,250,1,80)
 
-    [w, h] = signal.sosfreqz(sos,fs=fs)
+    sos = cheby(fs,1.35e3, 1.5e3, 1, 80)
+    sos2cmsis(sos)
+   
+    plt.figure()
+    [w, h] = signal.sosfreqz(sos, fs=fs)
     plt.semilogx(w,20*np.log10(np.abs(h)))
     plt.grid()
     plt.show()

@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 #include <stm32f4xx.h>
 
 #include "uart.h"
@@ -10,6 +11,34 @@
 
 #include "am.h"
 #include "ssb.h"
+
+typedef enum {
+    AS_IDLE,
+    AS_DSP,
+    AS_SETVFO,
+    AS_SETVOL,
+    AS_PARSE
+} ApplicationStateMachine;
+
+typedef enum {
+    MS_CW,
+    MS_LSB,
+    MS_USB,
+    MS_AM
+} ModulationScheme;
+
+typedef struct {
+    uint32_t dial_frequency;
+    uint32_t vfo_frequency;
+    ModulationScheme modulation_scheme;
+    int8_t headphone_volume;
+} ApplicationSettings;
+
+typedef struct {
+    char name[10];
+    char type[10];
+    uint32_t value;
+} Command;
 
 void busy(uint32_t delay) {
     for (uint32_t i = 0; i < delay; i++) __asm("mov r0,r0");
@@ -82,54 +111,150 @@ void tayloe_gpio_init() {
     // both pins need to be set low because multiplexer does
     // not allow independent control of both halves
     GPIOA->BSRR |= GPIO_BSRR_BR9 | GPIO_BSRR_BR8;
+    //GPIOA->BSRR |= GPIO_BSRR_BS9 | GPIO_BSRR_BS8;
+}
+
+void parse_command(char* buffer, Command* cmd) {
+    char *name, *type, *value;
+    name = strtok(buffer, " ");
+    type = strtok(NULL, " ");
+    value = strtok(NULL, " ");
+    strncpy(cmd->name,name,10);
+    strncpy(cmd->type,type,10);
+    cmd->value = atoi(value);
 }
 
 int main(void) {
+    // App state
+    ApplicationStateMachine app_state = AS_IDLE;
+    // App settings
+    ApplicationSettings app_settings;
+    app_settings.dial_frequency = 7069350;
+    app_settings.vfo_frequency = app_settings.dial_frequency;
+    app_settings.modulation_scheme = MS_LSB;
+    app_settings.headphone_volume = -16;
+    // For parsing uart interface commands
+    Command cmd;
+    // Demodulators
+    AM_Demodulator am;
+    SSB_Demodulator ssb;
+    SSB_Demodulator cw;
+
     SystemInit();
     
     clock_config();
     nucleo_led_init();
     tayloe_gpio_init();
 
-    //AM_Demodulator am;
-    //AM_Demodulator_init(&am);
-    SSB_Demodulator ssb;
-    SSB_Demodulator_init(&ssb);
+    AM_Demodulator_init(&am);
+    SSB_Demodulator_init(&ssb, LSB);
+    SSB_Demodulator_init(&cw, USB);
 
     uart_init();
-    uart_puts("Hello World!\r\n");
 
     i2c_init();
     si5351_init();
-    si5351_set_frequency(28000000);
+    si5351_set_frequency((float)(app_settings.vfo_frequency<<2));
     wm8731_init();
+    wm8731_set_hp_volume(app_settings.headphone_volume, BOTH);
     i2s_init();
 
-
-    wm8731_set_hp_volume(-26, BOTH);
-/*
-    float tone0 = 0;
-    float tone1 = 0;
-    float sin = 0;
-    q31_t tmp;
-*/
-
     while (1) {
-        while (uart_state != END) {
-            if (i2s_buffer_full == true) {
-                i2s_buffer_full = false;
-                demod_ssb(&ssb);
-            } else {
-                nucleo_led_on();
-                busy(0x00ffffff);
+        switch (app_state) {
+            case AS_IDLE:
                 nucleo_led_off();
-                busy(0x00ffffff);
-            }
+                if (uart_state == END) {
+                    app_state = AS_PARSE;
+                } else if (i2s_receive_buffer_full == true) {
+                    i2s_receive_buffer_full = false;
+                    app_state = AS_DSP;
+                } else {
+                    app_state = AS_IDLE;
+                }
+                break;
+
+            case AS_DSP:
+                nucleo_led_on();
+                switch (app_settings.modulation_scheme) {
+                    case MS_CW:
+                        demod_ssb(&cw);
+                        break;
+
+                    case MS_LSB:
+                        set_ssb_sideband(&ssb, LSB);
+                        demod_ssb(&ssb);
+                        break;
+
+                    case MS_USB:
+                        set_ssb_sideband(&ssb, USB);
+                        demod_ssb(&ssb);
+                        break;
+
+                    case MS_AM:
+                        demod_am(&am);
+                        break;
+                }
+                app_state = AS_IDLE;
+                break;
+
+            case AS_SETVFO:
+                app_settings.vfo_frequency = app_settings.dial_frequency;
+                switch (app_settings.modulation_scheme) {
+                    case MS_CW:
+                        app_settings.vfo_frequency -= 4250;
+                        break;
+
+                    case MS_LSB:
+                        app_settings.vfo_frequency -= 6650;
+                        break;
+
+                    case MS_USB:
+                        app_settings.vfo_frequency -= 3350;
+                        break;
+
+                    case MS_AM:
+                        app_settings.vfo_frequency = app_settings.dial_frequency;
+                        break;
+                }
+ 
+                wm8731_mute_line_in(BOTH);
+                si5351_set_frequency((float)(app_settings.vfo_frequency<<2));
+                wm8731_set_line_in_volume(55, BOTH);
+                app_state = AS_IDLE;
+                break;
+
+            case AS_SETVOL:
+                wm8731_set_hp_volume(app_settings.headphone_volume, BOTH);
+                app_state = AS_IDLE;
+                break;
+
+            case AS_PARSE:
+                parse_command((char*)uart_rxbuf, &cmd);
+                memset((char*)uart_rxbuf,0,UART_BUFSIZE);
+                uart_state = IDLE;
+                if (strncmp(cmd.name, "freq", 4) == 0) {
+                    if (strncmp(cmd.type, "am", 2) == 0) {
+                        app_settings.modulation_scheme = MS_AM;
+                    } else if (strncmp(cmd.type, "cw", 2) == 0) {
+                        app_settings.modulation_scheme = MS_CW;
+                    } else if (strncmp(cmd.type, "lsb", 3) == 0) {
+                        app_settings.modulation_scheme = MS_LSB;
+                    } else if (strncmp(cmd.type, "usb", 3) == 0) {
+                        app_settings.modulation_scheme = MS_USB;
+                    }
+                    app_settings.dial_frequency = cmd.value;
+                    app_state = AS_SETVFO;
+                } else if (strncmp(cmd.name, "hp", 2) == 0) {
+                    if (strncmp(cmd.type, "vol", 3) == 0) {
+                        if ((cmd.value >= 0) && (cmd.value <= 100)) {
+                            app_settings.headphone_volume = -44 + (int8_t)(cmd.value>>1);
+                        }
+                    }
+                    app_state = AS_SETVOL;
+                } else {
+                    app_state = AS_IDLE;
+                }
+                break;
         }
-        
-        uint32_t freq = atoi((const char*)uart_rxbuf);
-        si5351_set_frequency(freq*4.0f);
-        for (uint8_t i = 0; i < UART_BUFSIZE; i++) uart_rxbuf[i] = 0;
-        uart_state = IDLE;
     }
 }

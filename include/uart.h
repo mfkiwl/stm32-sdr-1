@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <stm32f4xx.h>
 
-#define UART_BUFSIZE 10
+#define UART_BUFSIZE 32
 
 typedef enum {
     IDLE,

@@ -98,6 +98,7 @@ void wm8731_write_reg(uint8_t reg, uint16_t value);
 void wm8731_reset();
 void wm8731_active();
 void wm8731_set_line_in_volume(uint8_t vol, WM8731_Channel channel);
+void wm8731_mute_line_in(WM8731_Channel channel);
 void wm8731_set_hp_volume(int8_t vol, WM8731_Channel channel);
 
 #endif

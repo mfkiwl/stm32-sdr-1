@@ -56,13 +56,13 @@ LDLIBS=-Wl,-larm_cortexM4lf_math
 .PHONY: all clean debug prog
 
 all: $(EXEC)
-	$(SIZE) $(EXEC)
 
 $(BINARY): $(EXEC)
 	$(OBJCOPY) -O binary $< $@
 
 $(EXEC): $(STARTUP_OBJ) $(OBJECTS)
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+	$(SIZE) $(EXEC)
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.c $(HEADERS)
 	-mkdir -p $(dir $@)

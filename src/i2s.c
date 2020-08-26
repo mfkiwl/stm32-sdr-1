@@ -8,7 +8,8 @@ volatile int32_t i2s_transmit_buffer1[I2S_BUFSIZE];
 volatile int32_t* i2s_receive_buffer;
 volatile int32_t* i2s_transmit_buffer;
 
-volatile bool i2s_buffer_full;
+volatile bool i2s_receive_buffer_full;
+volatile bool i2s_transmit_buffer_empty;
 
 // This is for testing purposes only
 // The received data from the previous transfer is 
@@ -17,7 +18,8 @@ volatile bool i2s_buffer_full;
 //volatile int32_t* i2s_transmit_buffer1 = i2s_receive_buffer1;
 
 void i2s_init() {
-    i2s_buffer_full = false;
+    i2s_receive_buffer_full = false;
+    i2s_transmit_buffer_empty = true;
 
     i2s_gpio_init();
     i2s_dma_init();
@@ -198,6 +200,8 @@ void DMA1_Stream4_IRQHandler() {
         } else {
             i2s_transmit_buffer = i2s_transmit_buffer1;
         }
+        // let the main application know
+        i2s_transmit_buffer_empty = true;
         // clear the interrupt flag
         DMA1->HIFCR = DMA_HIFCR_CTCIF4;
     }
@@ -214,7 +218,7 @@ void DMA1_Stream3_IRQHandler() {
             i2s_receive_buffer = i2s_receive_buffer1;
         }
         // let the main application know
-        i2s_buffer_full = true;
+        i2s_receive_buffer_full = true;
         // clear the interrupt flag
         DMA1->LIFCR = DMA_LIFCR_CTCIF3;
     }

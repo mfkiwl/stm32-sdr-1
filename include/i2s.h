@@ -9,7 +9,8 @@
 
 extern volatile int32_t* i2s_receive_buffer;
 extern volatile int32_t* i2s_transmit_buffer;
-extern volatile bool i2s_buffer_full;
+extern volatile bool i2s_receive_buffer_full;
+extern volatile bool i2s_transmit_buffer_empty;
 
 void i2s_init();
 void i2s_gpio_init();

@@ -11,14 +11,15 @@ typedef enum {
 typedef struct {
     arm_biquad_casd_df1_inst_q31 Filter_I;
     arm_biquad_casd_df1_inst_q31 Filter_Q;
-    q31_t FilterState_I[16];
-    q31_t FilterState_Q[16];
-    float phase;
-    float dphi;
+    q31_t FilterState_I[40];
+    q31_t FilterState_Q[40];
+    uint32_t lo_phase;
+    uint32_t lo_dphi;
     SSB_Sideband sideband;
 } SSB_Demodulator;
 
-void SSB_Demodulator_init(SSB_Demodulator* demod);
+void SSB_Demodulator_init(SSB_Demodulator* demod, SSB_Sideband sideband);
+void set_ssb_sideband(SSB_Demodulator* demod, SSB_Sideband sideband);
 void demod_ssb(SSB_Demodulator* demod);
 
 #endif

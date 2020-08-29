@@ -10,7 +10,9 @@ CMSIS=$(CUBEMX)/Drivers/CMSIS
 CMSIS_DEVICE=$(CMSIS)/Device/ST/STM32F4xx
 
 # the device linker script
-LDSCRIPT=STM32F401RETx_FLASH.ld
+# LDSCRIPT=STM32F401RETx_FLASH.ld
+#LDSCRIPT=$(CUBEMX)/Projects/STM32F401RE-Nucleo/Templates_LL/SW4STM32/NUCLEO-F401RE/STM32F401RETx_FLASH.ld
+LDSCRIPT=stm32f401ret6.ld
 # the startup file
 STARTUP=$(CMSIS_DEVICE)/Source/Templates/gcc/startup_stm32f401xe.s
 
@@ -51,7 +53,7 @@ CFLAGS+=-O2 -ggdb -ffast-math -ffreestanding -ffunction-sections -fdata-sections
 # linker flags
 LDFLAGS=-Wl,--gc-sections -T $(LDSCRIPT)
 LDFLAGS+=$(LINC)
-LDLIBS=-Wl,-larm_cortexM4lf_math
+LDLIBS=-Wl,-larm_cortexM4lf_math -Wl,-lm
 
 .PHONY: all clean debug prog
 

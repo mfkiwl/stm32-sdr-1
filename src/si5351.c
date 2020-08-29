@@ -154,6 +154,6 @@ void si5351_write_vcxo_param(uint32_t param) {
     buf[0] = VCXO_PARAM;
     buf[1] = param & 0xff;
     buf[2] = (param>>8) & 0xff;
-    buf[4] = (param>>16) & 0x3f;
+    buf[3] = (param>>16) & 0x3f;
     i2c_write_buf(DEV_WRITE_ADDRESS, buf, 4);
 }

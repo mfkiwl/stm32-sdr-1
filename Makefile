@@ -45,15 +45,31 @@ INC=-I $(INCDIR) \
 # additional linker searchpath for ARM math library
 LINC=-L $(CMSIS)/Lib/GCC
 # compiler flags
-CFLAGS=$(INC)
-CFLAGS+=-DARM_MATH_CM4
-CFLAGS+=-D$(TARGET) -mcpu=cortex-m4 -mthumb -mfloat-abi=hard -mfpu=fpv4-sp-d16
-CFLAGS+=-Wall -Werror -std=c99
-CFLAGS+=-O2 -ggdb -ffast-math -ffreestanding -ffunction-sections -fdata-sections -flto
+CDEFS=-DARM_MATH_CM4 \
+      -D$(TARGET) 
+
+CFLAGS=$(INC) $(CDEFS)
+
+CFLAGS+=-mcpu=cortex-m4 \
+        -mthumb \
+        -mfloat-abi=hard \
+        -mfpu=fpv4-sp-d16
+CFLAGS+=-Wall \
+        -Werror \
+        -std=c99
+CFLAGS+=-Os \
+        -ggdb \
+        -ffast-math \
+        -ffreestanding \
+        -ffunction-sections \
+        -fdata-sections \
+        -flto
 # linker flags
-LDFLAGS=-Wl,--gc-sections -T $(LDSCRIPT)
+LDFLAGS=-Wl,--gc-sections \
+        -T $(LDSCRIPT)
 LDFLAGS+=$(LINC)
-LDLIBS=-Wl,-larm_cortexM4lf_math -Wl,-lm
+LDLIBS=-Wl,-larm_cortexM4lf_math \
+       -Wl,-lm
 
 .PHONY: all clean debug prog
 

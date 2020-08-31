@@ -6,8 +6,10 @@
 typedef struct {
     arm_biquad_casd_df1_inst_q31 Filter_I;
     arm_biquad_casd_df1_inst_q31 Filter_Q;
-    q31_t FilterState_I[16];
-    q31_t FilterState_Q[16];
+    q31_t FilterState_I[20];
+    q31_t FilterState_Q[20];
+    uint32_t lo_phase;
+    uint32_t lo_dphi;
 } AM_Demodulator;
 
 void AM_Demodulator_init(AM_Demodulator* demod);

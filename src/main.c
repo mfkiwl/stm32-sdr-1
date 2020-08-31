@@ -213,7 +213,7 @@ int main(void) {
                         break;
 
                     case MS_AM:
-                        app_settings.vfo_frequency = app_settings.dial_frequency;
+                        app_settings.vfo_frequency -= 6000;
                         break;
                 }
  

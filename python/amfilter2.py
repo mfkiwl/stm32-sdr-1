@@ -55,8 +55,8 @@ def sos2cmsis(sos):
     print(f"q31_t FilterState[{4*num_stages}];")
 
 if __name__ == "__main__":
-    sos = ellip(fs, 4.5e3, 5e3, 1, 80)
-    #sos = ellip_bp(fs, [100, 4.5e3], [50, 5e3], 1, 80)
+    #sos = ellip(fs, 4.5e3, 5e3, 1, 80)
+    sos = ellip_bp(fs, [100, 4.5e3], [20, 5e3], 1, 80)
     sos2cmsis(sos)
    
     plt.figure()

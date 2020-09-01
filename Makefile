@@ -32,33 +32,66 @@ OBJECTS=$(patsubst $(SRCDIR)/%.c,$(OBJDIR)/%.o,$(SOURCES))
 # startup code
 STARTUP_OBJ=$(patsubst %.s,$(OBJDIR)/%.o,$(notdir $(STARTUP)))
 
+
 # the needed toolchain binaries
-CC=arm-none-eabi-gcc
+COMPILER ?= arm-none-eabi-gcc
+CC = $(COMPILER)
+
 GDB=arm-none-eabi-gdb
 OBJCOPY=arm-none-eabi-objcopy
 SIZE=arm-none-eabi-size
+
+# define the architecture specifics
+ARCH_CFLAGS=-mcpu=cortex-m4 \
+            -mfloat-abi=hard \
+            -mfpu=fpv4-sp-d16 \
+            -mthumb
+
 # compiler search path
-INC=-I $(INCDIR) \
+CINC=-I $(INCDIR) \
 	-I $(CMSIS)/Include \
 	-I $(CMSIS_DEVICE)/Include \
     -I $(CMSIS)/DSP/Include
-# additional linker searchpath for ARM math library
+
+# additional linker searchpaths
 LINC=-L $(CMSIS)/Lib/GCC
+
+
+CORTEXM_SYSROOT=$(shell arm-none-eabi-gcc $(ARCH_CFLAGS) -print-sysroot)
+CORTEXM_MULTILIB=$(shell arm-none-eabi-gcc $(ARCH_CFLAGS) -print-multi-directory)
+CORTEXM_LIBGCC_DIR=$(dir $(shell arm-none-eabi-gcc $(ARCH_CFLAGS) -print-libgcc-file-name))
+
+LIBGCC_OBJS = $(wildcard $(CORTEXM_LIBGCC_DIR)*.o)
+
+ifneq ('', '$(findstring gcc,$(shell $(CC) --version))')
+    $(info ========== arm-none-eabi-gcc ==========)
+    CFLAGS=-Os -nostdlib
+endif
+
+ifneq ('', '$(findstring clang,$(shell $(CC) --version))')
+    $(info ========== clang ==========)
+    CFLAGS=-Qunused-arguments \
+           --target=arm-none-eabi \
+           --sysroot=$(CORTEXM_SYSROOT) \
+           -rtlib=libgcc \
+           -nostdlib
+
+    CFLAGS+=-Oz
+
+    LINC+=-L$(CORTEXM_LIBGCC_DIR) \
+          -L$(CORTEXM_SYSROOT)/lib/$(CORTEXM_MULTILIB)
+endif
+
 # compiler flags
-CDEFS=-DARM_MATH_CM4 \
-      -D$(TARGET) 
+CDEF=-DARM_MATH_CM4 \
+     -D$(TARGET) 
 
-CFLAGS=$(INC) $(CDEFS)
+CFLAGS+=$(CINC) $(CDEF) $(ARCH_CFLAGS)
 
-CFLAGS+=-mcpu=cortex-m4 \
-        -mthumb \
-        -mfloat-abi=hard \
-        -mfpu=fpv4-sp-d16
 CFLAGS+=-Wall \
         -Werror \
         -std=c99
-CFLAGS+=-Os \
-        -ggdb \
+CFLAGS+=-ggdb \
         -ffast-math \
         -ffreestanding \
         -ffunction-sections \
@@ -69,7 +102,9 @@ LDFLAGS=-Wl,--gc-sections \
         -T $(LDSCRIPT)
 LDFLAGS+=$(LINC)
 LDLIBS=-Wl,-larm_cortexM4lf_math \
-       -Wl,-lm
+       -Wl,-lm \
+       -Wl,-lgcc \
+       -Wl,-lc
 
 .PHONY: all clean debug prog
 
@@ -79,7 +114,7 @@ $(BINARY): $(EXEC)
 	$(OBJCOPY) -O binary $< $@
 
 $(EXEC): $(STARTUP_OBJ) $(OBJECTS)
-	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(LIBGCC_OBJS) $^ $(LDLIBS)
 	$(SIZE) $(EXEC)
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.c $(HEADERS)

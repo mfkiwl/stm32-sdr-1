@@ -31,6 +31,7 @@ OBJECTS=$(patsubst $(SRCDIR)/%.c,$(OBJDIR)/%.o,$(SOURCES))
 
 # startup code
 STARTUP_OBJ=$(patsubst %.s,$(OBJDIR)/%.o,$(notdir $(STARTUP)))
+OBJECTS+=$(STARTUP_OBJ)
 
 
 # the needed toolchain binaries
@@ -62,6 +63,7 @@ CORTEXM_MULTILIB=$(shell arm-none-eabi-gcc $(ARCH_CFLAGS) -print-multi-directory
 CORTEXM_LIBGCC_DIR=$(dir $(shell arm-none-eabi-gcc $(ARCH_CFLAGS) -print-libgcc-file-name))
 
 LIBGCC_OBJS = $(wildcard $(CORTEXM_LIBGCC_DIR)*.o)
+OBJECTS+=$(LIBGCC_OBJS)
 
 ifneq ('', '$(findstring gcc,$(shell $(CC) --version))')
     $(info ========== arm-none-eabi-gcc ==========)
@@ -108,22 +110,25 @@ LDLIBS=-Wl,-larm_cortexM4lf_math \
 
 .PHONY: all clean debug prog
 
+define src-to-obj
+	-mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -c -o $@ $<
+endef
+
 all: $(EXEC)
 
 $(BINARY): $(EXEC)
 	$(OBJCOPY) -O binary $< $@
 
-$(EXEC): $(STARTUP_OBJ) $(OBJECTS) $(LIBGCC_OBJS)
+$(EXEC): $(OBJECTS)
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 	$(SIZE) $(EXEC)
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.c $(HEADERS)
-	-mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -c -o $@ $<
+	$(src-to-obj)
 
 $(STARTUP_OBJ): $(STARTUP)
-	-mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -c -o $@ $<
+	$(src-to-obj)
 
 debug: $(EXEC)
 	$(GDB) -ex 'target extended-remote | openocd -c "gdb_port pipe; log_output openocd.log" -f interface/stlink.cfg -f target/stm32f4x.cfg' $<

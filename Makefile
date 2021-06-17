@@ -3,7 +3,7 @@ EXEC=main.elf
 BINARY=main.bin
 TARGET=STM32F401xE
 # the location of STM32FxCubeMX
-CUBEMX=/home/knightshrub/.local/stm32/STM32Cube_FW_F4_V1.25.0
+CUBEMX=$(HOME)/.local/stm32/STM32Cube_FW_F4_V1.25.0
 
 # ARM CMSIS library
 CMSIS=$(CUBEMX)/Drivers/CMSIS
@@ -91,8 +91,8 @@ CFLAGS+=$(CINC) $(CDEF) $(ARCH_CFLAGS)
 CFLAGS+=-Wall \
         -Werror \
         -std=c99
-CFLAGS+=-ggdb \
-        -ffast-math \
+CFLAGS+=-ggdb
+CFLAGS+=-ffast-math \
         -ffreestanding \
         -ffunction-sections \
         -fdata-sections \
@@ -113,8 +113,8 @@ all: $(EXEC)
 $(BINARY): $(EXEC)
 	$(OBJCOPY) -O binary $< $@
 
-$(EXEC): $(STARTUP_OBJ) $(OBJECTS)
-	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(LIBGCC_OBJS) $^ $(LDLIBS)
+$(EXEC): $(STARTUP_OBJ) $(OBJECTS) $(LIBGCC_OBJS)
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 	$(SIZE) $(EXEC)
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.c $(HEADERS)
@@ -125,10 +125,8 @@ $(STARTUP_OBJ): $(STARTUP)
 	-mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c -o $@ $<
 
-# first start openocd like this:
-# openocd -f interface/stlink-v2-1.cfg -f target/stm32f4x.cfg
 debug: $(EXEC)
-	$(GDB) -ex "target remote :3333" $<
+	$(GDB) -ex 'target extended-remote | openocd -c "gdb_port pipe; log_output openocd.log" -f interface/stlink.cfg -f target/stm32f4x.cfg' $<
 
 prog: $(BINARY)
 	st-flash --reset write $< 0x8000000
